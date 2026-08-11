@@ -24,20 +24,6 @@ fn main() {
         default_input_device.to_string()
     );
 
-    // println!("[Доступные устройства вывода]:");
-    // if let Ok(devices) = host.output_devices() {
-    //     for device in devices {
-    //         println!("- {}", device.to_string());
-    //     }
-    // }
-
-    // println!("[Доступные устройства ввода]:");
-    // if let Ok(devices) = host.input_devices() {
-    //     for device in devices {
-    //         println!("- {}", device.to_string());
-    //     }
-    // }
-
     let config = default_output_device
         .default_output_config()
         .expect("Не удалось получить дефолтную конфигурацию дефолтного устройства вывода");
