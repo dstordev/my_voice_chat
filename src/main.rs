@@ -1,4 +1,3 @@
-use cpal::StreamConfig;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::HeapRb;
 use ringbuf::traits::*; // КРИТИЧНО ДЛЯ ringbuf 0.5+: подключает методы push/pop/split
@@ -6,7 +5,7 @@ use std::io;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let target_sample_rate = 48000; // 48000 Гц
-    let target_channels = 1; // 1 канал (Моно)
+    let input_channels = 1; // 1 канал (Моно)
 
     let host = cpal::default_host();
     println!("[Аудио-хост]: {:?}", host.id());
@@ -30,21 +29,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut input_config = default_input_device.default_input_config()?.config();
     let mut output_config = default_output_device.default_output_config()?.config();
 
-    let buffer_size = cpal::BufferSize::Fixed(256);
-    input_config.buffer_size = buffer_size;
-    output_config.buffer_size = buffer_size;
+    input_config.channels = input_channels;
+
+    // Принудительно ставим одинаковую частоту 48000 Гц для обеих сторон
+    input_config.sample_rate = target_sample_rate;
+    output_config.sample_rate = target_sample_rate;
+
+    // Даем PipeWire самому выбирать размер буфера
+    input_config.buffer_size = cpal::BufferSize::Default;
+    output_config.buffer_size = cpal::BufferSize::Default;
+
+    println!("[Входной конфиг]: {:?}", input_config);
+    println!("[Выходной конфиг]: {:?}", output_config);
 
     let in_channels = input_config.channels as usize;
     let out_channels = output_config.channels as usize;
 
     // Емкость кольцевого буфера с большим запасом, чтобы предотвратить переполнение
-    let ring_buffer_capacity = 4096;
+    let ring_buffer_capacity = 16384;
 
     let ring = HeapRb::<f32>::new(ring_buffer_capacity);
     let (mut producer, mut consumer) = ring.split();
 
     // Предзаполнение тишиной
-    for _ in 0..(256 * 2) {
+    // Предзаполняем 2048 сэмплов (~42 мс тишины), чтобы динамики не голодали во время квантов PipeWire
+    for _ in 0..2048 {
         let _ = producer.try_push(0.0);
     }
 
