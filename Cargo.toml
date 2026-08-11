@@ -1,0 +1,9 @@
+[package]
+name = "my_voice_chat"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+audiopus = "0.2.0"
+cpal = "0.18.1"
+ringbuf = "0.5.1"
