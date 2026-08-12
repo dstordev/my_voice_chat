@@ -1,6 +1,6 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::HeapRb;
-use ringbuf::traits::*; // КРИТИЧНО ДЛЯ ringbuf 0.5+: подключает методы push/pop/split
+use ringbuf::traits::*;
 use std::io;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
