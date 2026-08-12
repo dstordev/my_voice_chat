@@ -11,16 +11,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let host = cpal::default_host();
     println!("ℹ️ | Аудио-хост: {:?}", host.id());
 
-    let default_output_device = host
+    let output_device = host
         .default_output_device()
         .expect("🔴 | Не удалось получить динамики.");
 
-    let default_input_device = host
+    let input_device = host
         .default_input_device()
         .expect("🔴 | Не удалось получить микрофон.");
 
-    let mut input_config = default_input_device.default_input_config()?.config();
-    let mut output_config = default_output_device.default_output_config()?.config();
+    let mut input_config = input_device.default_input_config()?.config();
+    let mut output_config = output_device.default_output_config()?.config();
 
     input_config.channels = input_channels;
 
@@ -60,11 +60,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let err_fn = |err: cpal::Error| eprintln!("🔴 | Ошибка в аудиопотоке: {}", err);
 
-    let input_stream = default_input_device
+    let input_stream = input_device
         .build_input_stream(input_config, input_data_fn, err_fn, None)
         .expect("🔴 | Не удалось собрать поток ввода.");
 
-    let output_stream = default_output_device
+    let output_stream = output_device
         .build_output_stream(output_config, output_data_fn, err_fn, None)
         .expect("🔴 | Не удалось собрать поток вывода.");
 
