@@ -2,64 +2,59 @@ use anyhow::Result;
 use cpal::traits::StreamTrait;
 use iroh::EndpointId;
 use my_voice_chat::{audio, codec, net};
-use ringbuf::HeapRb;
-use ringbuf::traits::*;
-use std::io::{self, Write};
-use std::time::Duration;
+use ringbuf::{HeapRb, traits::*};
+use std::{
+    io::{self, Write},
+    time::Duration,
+};
+
+fn prompt(msg: &str) -> Result<String> {
+    print!("{msg}");
+    io::stdout().flush()?;
+    let mut buf = String::new();
+    io::stdin().read_line(&mut buf)?;
+    Ok(buf.trim().to_owned())
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let settings = audio::AudioSettings::default();
-    let (input_device, input_config, output_device, output_config) =
-        audio::setup_devices(&settings)?;
+    let (in_dev, in_cfg, out_dev, out_cfg) = audio::setup_devices(&settings)?;
 
-    let in_ring = HeapRb::<f32>::new(settings.ring_buffer_capacity * 4);
-    let (in_prod, mut in_cons) = in_ring.split();
+    let cap = settings.ring_buffer_capacity * 4;
+    let (in_prod, mut in_cons) = HeapRb::<f32>::new(cap).split();
+    let (mut out_prod, out_cons) = HeapRb::<f32>::new(cap).split();
 
-    let out_ring = HeapRb::<f32>::new(settings.ring_buffer_capacity * 4);
-    let (mut out_prod, out_cons) = out_ring.split();
+    let in_stream = audio::create_input_stream(&in_dev, in_cfg, in_prod)?;
+    let out_stream = audio::create_output_stream(&out_dev, out_cfg, out_cons)?;
+    in_stream.play()?;
+    out_stream.play()?;
 
-    let input_stream = audio::create_input_stream(&input_device, input_config, in_prod)?;
-    let output_stream = audio::create_output_stream(&output_device, output_config, out_cons)?;
-
-    input_stream.play()?;
-    output_stream.play()?;
-
-    println!("\n Выберите режим:");
-    println!("1 - Ждать входящий звонок (Host)");
-    println!("2 - Позвонить другу (Client)");
-    print!("Ваш выбор [1/2]: ");
-    io::stdout().flush()?;
-
-    let mut mode = String::new();
-    io::stdin().read_line(&mut mode)?;
-
+    let mode = prompt(
+        "\nВыберите режим:\n1 - Ждать звонок (Host)\n2 - Позвонить (Client)\nВаш выбор [1/2]: ",
+    )?;
     let endpoint = net::create_endpoint().await?;
 
-    let connection = if mode.trim() == "1" {
-        println!("\n🔑 | Ваш EndpointId: {}", endpoint.addr().id);
-        println!("⏳ | Ожидание входящего звонка...");
+    let conn = if mode == "1" {
+        println!(
+            "\n🔑 | Ваш EndpointId: {}\n⏳ | Ожидание звонка...",
+            endpoint.addr().id
+        );
         net::accept_connection(&endpoint).await?
     } else {
-        print!("\n🔑 | Введите EndpointId собеседника: ");
-        io::stdout().flush()?;
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let node_id: EndpointId = input.trim().parse()?;
-
+        let node_id: EndpointId = prompt("\n🔑 | Введите EndpointId собеседника: ")?.parse()?;
         println!("⏳ | Установка P2P соединения...");
         net::connect_to_peer(&endpoint, node_id).await?
     };
 
     println!("🟢 | Звонок соединен! Можно говорить (Opus сжатие включено)!");
 
-    let recv_conn = connection.clone();
-    let recv_handle = tokio::spawn(async move {
+    let recv_conn = conn.clone();
+    let recv_task = tokio::spawn(async move {
         let Ok(mut decoder) = codec::AudioDecoder::new() else {
             eprintln!("🔴 | Ошибка создания Opus декодера");
             return;
         };
-
         while let Ok(bytes) = recv_conn.read_datagram().await {
             if let Ok(samples) = decoder.decode(&bytes) {
                 let _ = out_prod.push_slice(&samples);
@@ -68,13 +63,11 @@ async fn main() -> Result<()> {
         println!("🔴 | Собеседник отключился");
     });
 
-    let send_conn = connection;
-    let send_handle = tokio::spawn(async move {
+    let send_task = tokio::spawn(async move {
         let Ok(mut encoder) = codec::AudioEncoder::new() else {
             eprintln!("🔴 | Ошибка создания Opus кодера");
             return;
         };
-
         let mut interval = tokio::time::interval(Duration::from_millis(5));
         let mut buf = [0.0f32; codec::FRAME_SIZE];
 
@@ -82,8 +75,8 @@ async fn main() -> Result<()> {
             interval.tick().await;
             if in_cons.occupied_len() >= codec::FRAME_SIZE {
                 in_cons.pop_slice(&mut buf);
-                if let Ok(encoded_bytes) = encoder.encode(&buf) {
-                    if send_conn.send_datagram(encoded_bytes.into()).is_err() {
+                if let Ok(bytes) = encoder.encode(&buf) {
+                    if conn.send_datagram(bytes.into()).is_err() {
                         break;
                     }
                 }
@@ -91,7 +84,6 @@ async fn main() -> Result<()> {
         }
     });
 
-    let _ = tokio::join!(recv_handle, send_handle);
-
+    let _ = tokio::join!(recv_task, send_task);
     Ok(())
 }
