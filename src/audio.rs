@@ -3,7 +3,7 @@ use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{Device, Stream, StreamConfig};
 use ringbuf::traits::*;
 
-// Структура-конфигурация, чтобы удобнее было передавать настройки
+/// Структура-конфигурация, чтобы удобнее было передавать настройки
 pub struct AudioSettings {
     pub target_sample_rate: u32,
     pub input_channels: u16,
@@ -20,7 +20,7 @@ impl Default for AudioSettings {
     }
 }
 
-// Получаем дефолтные устройства и подготавливаем их конфиги
+/// Получаем дефолтные устройства и подготавливаем их конфиги
 pub fn setup_devices(
     settings: &AudioSettings,
 ) -> Result<(Device, StreamConfig, Device, StreamConfig)> {
@@ -40,7 +40,7 @@ pub fn setup_devices(
 
     input_config.channels = settings.input_channels;
 
-    // Принудительно ставим одинаковую частоту 48000 Гц для обеих сторон
+    // Принудительно ставим одинаковую частоту для обеих сторон
     input_config.sample_rate = settings.target_sample_rate;
     output_config.sample_rate = settings.target_sample_rate;
 
@@ -54,7 +54,7 @@ pub fn setup_devices(
     Ok((input_device, input_config, output_device, output_config))
 }
 
-// Функция сборки потока ВВОДА (микрофон)
+/// Функция сборки потока ВВОДА (микрофон)
 pub fn create_input_stream(
     input_device: &Device,
     input_config: StreamConfig,
@@ -78,7 +78,7 @@ pub fn create_input_stream(
     Ok(input_stream)
 }
 
-// Функция сборки потока ВЫВОДА (динамики)
+/// Функция сборки потока ВЫВОДА (динамики)
 pub fn create_output_stream(
     output_device: &Device,
     output_config: StreamConfig,
