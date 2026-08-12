@@ -45,8 +45,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let in_channels = input_config.channels as usize;
     let out_channels = output_config.channels as usize;
 
-    // Емкость кольцевого буфера с большим запасом, чтобы предотвратить переполнение
-    let ring_buffer_capacity = 16384;
+    // Емкость кольцевого буфера
+    let ring_buffer_capacity = 1024;
 
     let ring = HeapRb::<f32>::new(ring_buffer_capacity);
     let (mut producer, mut consumer) = ring.split();
