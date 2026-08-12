@@ -12,7 +12,7 @@ async fn main() -> Result<()> {
     let settings = audio::AudioSettings::default();
     let (_, _, output_device, output_config) = audio::setup_devices(&settings)?;
 
-    let ring = HeapRb::<f32>::new(settings.ring_buffer_capacity * 16);
+    let ring = HeapRb::<f32>::new(settings.ring_buffer_capacity * 2);
     let (producer, consumer) = ring.split();
 
     let stream = audio::create_output_stream(&output_device, output_config, consumer)?;
@@ -44,6 +44,9 @@ async fn main() -> Result<()> {
             "🟢 | Новое P2P подключение от узла: {:?}",
             connection.remote_id()
         );
+        for path in connection.paths().iter() {
+            println!("Path: {:?}", path);
+        }
 
         let mut producer = producer;
         let handle = tokio::spawn(async move {

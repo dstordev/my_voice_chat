@@ -14,7 +14,7 @@ async fn main() -> Result<()> {
     let settings = audio::AudioSettings::default();
     let (input_device, input_config, _, _) = audio::setup_devices(&settings)?;
 
-    let ring = HeapRb::<f32>::new(settings.ring_buffer_capacity * 16);
+    let ring = HeapRb::<f32>::new(settings.ring_buffer_capacity * 2);
     let (producer, mut consumer) = ring.split();
 
     let stream = audio::create_input_stream(&input_device, input_config, producer)?;
