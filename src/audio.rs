@@ -1,7 +1,7 @@
+use anyhow::Result;
 use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{Device, Stream, StreamConfig};
 use ringbuf::traits::*;
-use std::error::Error;
 
 // Структура-конфигурация, чтобы удобнее было передавать настройки
 pub struct AudioSettings {
@@ -23,7 +23,7 @@ impl Default for AudioSettings {
 // Получаем дефолтные устройства и подготавливаем их конфиги
 pub fn setup_devices(
     settings: &AudioSettings,
-) -> Result<(Device, StreamConfig, Device, StreamConfig), Box<dyn Error>> {
+) -> Result<(Device, StreamConfig, Device, StreamConfig)> {
     let host = cpal::default_host();
     println!("ℹ️ | Аудио-хост: {:?}", host.id());
 
@@ -59,7 +59,7 @@ pub fn create_input_stream(
     input_device: &Device,
     input_config: StreamConfig,
     mut producer: impl Producer<Item = f32> + Send + 'static,
-) -> Result<Stream, Box<dyn Error>> {
+) -> Result<Stream> {
     let in_channels = input_config.channels as usize;
 
     let err_fn = |err: cpal::Error| eprintln!("🔴 | Ошибка в аудиопотоке: {}", err);
@@ -83,7 +83,7 @@ pub fn create_output_stream(
     output_device: &Device,
     output_config: StreamConfig,
     mut consumer: impl Consumer<Item = f32> + Send + 'static,
-) -> Result<Stream, Box<dyn Error>> {
+) -> Result<Stream> {
     let out_channels = output_config.channels as usize;
 
     let err_fn = |err: cpal::Error| eprintln!("🔴 | Ошибка в аудиопотоке: {}", err);
