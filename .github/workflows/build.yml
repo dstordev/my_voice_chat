@@ -26,7 +26,7 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: my_voice_chat_mac
-            binary_path: target/aarch64-apple-darwin/release/my_voice_chat
+            binary_path: target/release/my_voice_chat
 
     steps:
       - name: Checkout repository
@@ -37,14 +37,24 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install dependencies (Linux)
+      - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y libasound2-dev libopus-dev pkg-config
 
-      - name: Build release binary
+      - name: Install macOS dependencies
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install opus pkg-config autoconf automake libtool
+
+      - name: Build release binary (Linux & Windows)
+        if: matrix.os != 'macos-latest'
         run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Build release binary (macOS)
+        if: matrix.os == 'macos-latest'
+        run: cargo build --release
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
