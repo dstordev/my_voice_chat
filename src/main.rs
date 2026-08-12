@@ -9,23 +9,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ring_buffer_capacity = 1024; // Емкость кольцевого буфера
 
     let host = cpal::default_host();
-    println!("[Аудио-хост]: {:?}", host.id());
+    println!("ℹ️ | Аудио-хост: {:?}", host.id());
 
     let default_output_device = host
         .default_output_device()
-        .expect("Не удалось получить дефолтное устройство вывода.");
-    println!(
-        "[Дефолтное устройство вывода]: {:?}",
-        default_output_device.to_string()
-    );
+        .expect("🔴 | Не удалось получить динамики.");
 
     let default_input_device = host
         .default_input_device()
-        .expect("Не удалось получить дефолтное устройство ввода.");
-    println!(
-        "[Дефолтное устройство ввода]: {:?}",
-        default_input_device.to_string()
-    );
+        .expect("🔴 | Не удалось получить микрофон.");
 
     let mut input_config = default_input_device.default_input_config()?.config();
     let mut output_config = default_output_device.default_output_config()?.config();
@@ -40,8 +32,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     input_config.buffer_size = cpal::BufferSize::Default;
     output_config.buffer_size = cpal::BufferSize::Default;
 
-    println!("[Входной конфиг]: {:?}", input_config);
-    println!("[Выходной конфиг]: {:?}", output_config);
+    println!("ℹ️ | Конфиг микрофона: {:?}", input_config);
+    println!("ℹ️ | Конфиг динамиков: {:?}", output_config);
 
     let in_channels = input_config.channels as usize;
     let out_channels = output_config.channels as usize;
@@ -66,20 +58,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let err_fn = |err: cpal::Error| eprintln!("Ошибка в аудиопотоке: {}", err);
+    let err_fn = |err: cpal::Error| eprintln!("🔴 | Ошибка в аудиопотоке: {}", err);
 
     let input_stream = default_input_device
         .build_input_stream(input_config, input_data_fn, err_fn, None)
-        .expect("Незивестная ошибка построения потока ввода");
+        .expect("🔴 | Не удалось собрать поток ввода.");
 
     let output_stream = default_output_device
         .build_output_stream(output_config, output_data_fn, err_fn, None)
-        .expect("Незивестная ошибка построения потока вывода");
+        .expect("🔴 | Не удалось собрать поток вывода.");
 
     input_stream.play()?;
     output_stream.play()?;
 
-    println!("[+] Проброс звука успешно запущен!");
+    println!("🟢 | Звук с микрофона успешно идет к динамикам!");
     println!("Нажмите Enter, чтобы остановить...");
     let mut dummy = String::new();
     io::stdin().read_line(&mut dummy)?;
