@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         audio::setup_devices(&settings)?;
 
     // 3. Создаем кольцевой буфер
-    let ring = HeapRb::<f32>::new(settings.ring_buffer_capacity);
+    let ring = HeapRb::<f32>::new(settings.ring_buffer_capacity * 4);
     let (producer, consumer) = ring.split();
 
     // 4. Собираем потоки, передавая им половинки буфера
