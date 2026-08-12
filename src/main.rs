@@ -51,12 +51,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ring = HeapRb::<f32>::new(ring_buffer_capacity);
     let (mut producer, mut consumer) = ring.split();
 
-    // Предзаполнение тишиной
-    // Предзаполняем 2048 сэмплов (~42 мс тишины), чтобы динамики не голодали во время квантов PipeWire
-    for _ in 0..2048 {
-        let _ = producer.try_push(0.0);
-    }
-
     let input_data_fn = move |data: &[f32], _: &cpal::InputCallbackInfo| {
         // Делим вход на кадры и берем только 1-й канал
         for frame in data.chunks(in_channels) {
