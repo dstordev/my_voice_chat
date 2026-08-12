@@ -6,6 +6,7 @@ use std::io;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let target_sample_rate = 48000; // 48000 Гц
     let input_channels = 1; // 1 канал (Моно)
+    let ring_buffer_capacity = 1024; // Емкость кольцевого буфера
 
     let host = cpal::default_host();
     println!("[Аудио-хост]: {:?}", host.id());
@@ -44,9 +45,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let in_channels = input_config.channels as usize;
     let out_channels = output_config.channels as usize;
-
-    // Емкость кольцевого буфера
-    let ring_buffer_capacity = 1024;
 
     let ring = HeapRb::<f32>::new(ring_buffer_capacity);
     let (mut producer, mut consumer) = ring.split();
