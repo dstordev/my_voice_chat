@@ -1,7 +1,7 @@
 use anyhow::Result;
 use cpal::traits::StreamTrait;
 use iroh::EndpointId;
-use my_voice_chat::{audio, net};
+use my_voice_chat::{audio, codec, net};
 use ringbuf::HeapRb;
 use ringbuf::traits::*;
 use std::io::{self, Write};
@@ -13,10 +13,10 @@ async fn main() -> Result<()> {
     let (input_device, input_config, output_device, output_config) =
         audio::setup_devices(&settings)?;
 
-    let in_ring = HeapRb::<f32>::new(settings.ring_buffer_capacity * 2);
+    let in_ring = HeapRb::<f32>::new(settings.ring_buffer_capacity * 4);
     let (in_prod, mut in_cons) = in_ring.split();
 
-    let out_ring = HeapRb::<f32>::new(settings.ring_buffer_capacity * 2);
+    let out_ring = HeapRb::<f32>::new(settings.ring_buffer_capacity * 4);
     let (mut out_prod, out_cons) = out_ring.split();
 
     let input_stream = audio::create_input_stream(&input_device, input_config, in_prod)?;
@@ -51,32 +51,41 @@ async fn main() -> Result<()> {
         net::connect_to_peer(&endpoint, node_id).await?
     };
 
-    println!("🟢 | Звонок соединен! Можно говорить!");
+    println!("🟢 | Звонок соединен! Можно говорить (Opus сжатие включено)!");
 
     let recv_conn = connection.clone();
     let recv_handle = tokio::spawn(async move {
+        let Ok(mut decoder) = codec::AudioDecoder::new() else {
+            eprintln!("🔴 | Ошибка создания Opus декодера");
+            return;
+        };
+
         while let Ok(bytes) = recv_conn.read_datagram().await {
-            let samples: Vec<f32> = bytes
-                .chunks_exact(4)
-                .map(|c| f32::from_le_bytes(c.try_into().unwrap()))
-                .collect();
-            let _ = out_prod.push_slice(&samples);
+            if let Ok(samples) = decoder.decode(&bytes) {
+                let _ = out_prod.push_slice(&samples);
+            }
         }
         println!("🔴 | Собеседник отключился");
     });
 
     let send_conn = connection;
     let send_handle = tokio::spawn(async move {
+        let Ok(mut encoder) = codec::AudioEncoder::new() else {
+            eprintln!("🔴 | Ошибка создания Opus кодера");
+            return;
+        };
+
         let mut interval = tokio::time::interval(Duration::from_millis(5));
-        let mut buf = [0.0f32; 240];
+        let mut buf = [0.0f32; codec::FRAME_SIZE];
 
         loop {
             interval.tick().await;
-            if in_cons.occupied_len() >= 240 {
+            if in_cons.occupied_len() >= codec::FRAME_SIZE {
                 in_cons.pop_slice(&mut buf);
-                let bytes: Vec<u8> = buf.iter().flat_map(|s| s.to_le_bytes()).collect();
-                if send_conn.send_datagram(bytes.into()).is_err() {
-                    break;
+                if let Ok(encoded_bytes) = encoder.encode(&buf) {
+                    if send_conn.send_datagram(encoded_bytes.into()).is_err() {
+                        break;
+                    }
                 }
             }
         }
