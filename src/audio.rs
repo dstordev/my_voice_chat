@@ -92,9 +92,7 @@ pub fn create_output_stream(
         // Делим выход на кадры и берем РОВНО 1 моно-сэмпл, копируя его во все динамики (Л + П)
         for frame in data.chunks_mut(out_channels) {
             let sample = consumer.try_pop().unwrap_or(0.0);
-            for channel_sample in frame.iter_mut() {
-                *channel_sample = sample;
-            }
+            frame.fill(sample);
         }
     };
 
