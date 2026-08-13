@@ -3,6 +3,8 @@ use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{Device, Stream, StreamConfig};
 use ringbuf::traits::*;
 
+use crate::codec::FRAME_SIZE;
+
 /// Структура-конфигурация, чтобы удобнее было передавать настройки
 pub struct AudioSettings {
     pub target_sample_rate: u32,
@@ -89,7 +91,30 @@ pub fn create_output_stream(
 
     let err_fn = |err: cpal::Error| eprintln!("🔴 | Ошибка в аудиопотоке: {}", err);
 
+    // Накапливаем 3 кадра Opus (~60 мс звука) для защиты от сетевых задержек
+    let target_buffer = FRAME_SIZE * 3;
+    let mut is_buffering = true;
+
     let output_data_fn = move |chunk: &mut [f32], _: &cpal::OutputCallbackInfo| {
+        let occupied = consumer.occupied_len();
+
+        // 1. Если мы накопили мало сэмплов — отдаем тишину и ждем
+        if is_buffering {
+            if occupied >= target_buffer {
+                is_buffering = false;
+            } else {
+                chunk.fill(0.0);
+                return;
+            }
+        }
+
+        // 2. Если буфер опустел полностью — снова включаем накопление
+        if occupied == 0 {
+            is_buffering = true;
+            chunk.fill(0.0);
+            return;
+        }
+
         // Звуковая карта отдает `chunk`, куда просит записать звук
         for frame in chunk.chunks_mut(out_channels) {
             // `frame` тут стерео, поэтому `frame = [Л, П, Л, П, ...]`
