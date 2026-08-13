@@ -21,7 +21,7 @@ async fn main() -> Result<()> {
     let settings = audio::AudioSettings::default();
     let (in_dev, in_cfg, out_dev, out_cfg) = audio::setup_devices(&settings)?;
 
-    let cap = settings.ring_buffer_capacity * 4;
+    let cap = settings.ring_buffer_capacity;
     let (in_prod, mut in_cons) = HeapRb::<f32>::new(cap).split();
     let (mut out_prod, out_cons) = HeapRb::<f32>::new(cap).split();
 

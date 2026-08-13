@@ -15,7 +15,7 @@ impl Default for AudioSettings {
         Self {
             target_sample_rate: 48000,  // 48000 Гц
             input_channels: 1,          // 1 канал (Моно)
-            ring_buffer_capacity: 1024, // Емкость кольцевого буфера
+            ring_buffer_capacity: 4096, // Емкость кольцевого буфера
         }
     }
 }
