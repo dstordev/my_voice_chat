@@ -10,7 +10,13 @@ pub struct AudioEncoder {
 
 impl AudioEncoder {
     pub fn new() -> Result<Self> {
-        let encoder = Encoder::new(SampleRate::Hz48000, Channels::Mono, Application::Voip)?;
+        let mut encoder = Encoder::new(SampleRate::Hz48000, Channels::Mono, Application::Voip)?;
+
+        // Добавляем настройки для повышения качества и защиты от потерь по сети:
+        let _ = encoder.set_bitrate(audiopus::Bitrate::BitsPerSecond(32_000)); // 32 kbps — отлично для речи
+        let _ = encoder.set_inband_fec(true); // Включаем устойчивость к потерям пакетов (FEC)
+        let _ = encoder.set_packet_loss_perc(10); // Рассчитываем примерно на 10% потерь сети
+
         Ok(Self { encoder })
     }
 
