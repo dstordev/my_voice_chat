@@ -1,6 +1,6 @@
 use anyhow::Result;
 use audiopus::coder::{Decoder, Encoder};
-use audiopus::{Application, Channels, SampleRate};
+use audiopus::{Application, Bandwidth, Channels, SampleRate};
 
 pub const FRAME_SIZE: usize = 960;
 
@@ -10,10 +10,11 @@ pub struct AudioEncoder {
 
 impl AudioEncoder {
     pub fn new() -> Result<Self> {
-        let mut encoder = Encoder::new(SampleRate::Hz48000, Channels::Mono, Application::Voip)?;
+        let mut encoder = Encoder::new(SampleRate::Hz48000, Channels::Mono, Application::LowDelay)?;
 
-        // Добавляем настройки для повышения качества и защиты от потерь по сети:
-        let _ = encoder.set_bitrate(audiopus::Bitrate::BitsPerSecond(32_000)); // 32 kbps — отлично для речи
+        let _ = encoder.set_bandwidth(Bandwidth::Fullband);
+
+        let _ = encoder.set_bitrate(audiopus::Bitrate::BitsPerSecond(64_000)); // 64 kbps
         let _ = encoder.set_inband_fec(true); // Включаем устойчивость к потерям пакетов (FEC)
         let _ = encoder.set_packet_loss_perc(10); // Рассчитываем примерно на 10% потерь сети
 
