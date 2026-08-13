@@ -65,6 +65,7 @@ pub fn create_input_stream(
     let err_fn = |err: cpal::Error| eprintln!("🔴 | Ошибка в аудиопотоке: {}", err);
 
     let input_data_fn = move |chunk: &[f32], _: &cpal::InputCallbackInfo| {
+        // Звуковая карта отдает `chunk` для произвольного использования
         // Делим вход на кадры и берем только 1-й канал
         for frame in chunk.chunks(in_channels) {
             let _ = producer.try_push(frame[0]);
