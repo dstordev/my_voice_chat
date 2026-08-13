@@ -64,9 +64,9 @@ pub fn create_input_stream(
 
     let err_fn = |err: cpal::Error| eprintln!("🔴 | Ошибка в аудиопотоке: {}", err);
 
-    let input_data_fn = move |data: &[f32], _: &cpal::InputCallbackInfo| {
+    let input_data_fn = move |chunk: &[f32], _: &cpal::InputCallbackInfo| {
         // Делим вход на кадры и берем только 1-й канал
-        for frame in data.chunks(in_channels) {
+        for frame in chunk.chunks(in_channels) {
             let _ = producer.try_push(frame[0]);
         }
     };
@@ -88,9 +88,9 @@ pub fn create_output_stream(
 
     let err_fn = |err: cpal::Error| eprintln!("🔴 | Ошибка в аудиопотоке: {}", err);
 
-    let output_data_fn = move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-        // Звуковая карта отдает `data`, куда просит записать звук
-        for frame in data.chunks_mut(out_channels) {
+    let output_data_fn = move |chunk: &mut [f32], _: &cpal::OutputCallbackInfo| {
+        // Звуковая карта отдает `chunk`, куда просит записать звук
+        for frame in chunk.chunks_mut(out_channels) {
             // `frame` тут стерео, поэтому `frame = [Л, П, Л, П, ...]`
             // Берем 1 моно-сэмпл
             let sample = consumer.try_pop().unwrap_or(0.0);
