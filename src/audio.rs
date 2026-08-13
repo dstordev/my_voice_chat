@@ -89,9 +89,12 @@ pub fn create_output_stream(
     let err_fn = |err: cpal::Error| eprintln!("🔴 | Ошибка в аудиопотоке: {}", err);
 
     let output_data_fn = move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-        // Делим выход на кадры и берем РОВНО 1 моно-сэмпл, копируя его во все динамики (Л + П)
+        // Звуковая карта отдает `data`, куда просит записать звук
         for frame in data.chunks_mut(out_channels) {
+            // `frame` тут стерео, поэтому `frame = [Л, П, Л, П, ...]`
+            // Берем 1 моно-сэмпл
             let sample = consumer.try_pop().unwrap_or(0.0);
+            // Заполняем фрейм одним моно-сэмплом
             frame.fill(sample);
         }
     };
