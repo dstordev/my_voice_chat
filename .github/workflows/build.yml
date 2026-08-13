@@ -3,7 +3,11 @@ name: Build Multiplatform Binaries
 on:
   push:
     branches: ["main", "master"]
+    tags: ["v*"]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -61,3 +65,26 @@ jobs:
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.binary_path }}
+
+      # Переименовываем бинарник перед загрузкой в релиз, чтобы имена не конфликтовали
+      - name: Prepare binary name for release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cp ${{ matrix.binary_path }} ./${{ matrix.artifact_name }}.exe
+          else
+            cp ${{ matrix.binary_path }} ./${{ matrix.artifact_name }}
+          fi
+
+      # Публикуем готовый файл в раздел Releases
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            my_voice_chat_linux
+            my_voice_chat_windows.exe
+            my_voice_chat_mac
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
