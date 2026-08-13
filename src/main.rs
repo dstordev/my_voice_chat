@@ -73,7 +73,7 @@ async fn main() -> Result<()> {
 
         loop {
             interval.tick().await;
-            if in_cons.occupied_len() >= codec::FRAME_SIZE {
+            while in_cons.occupied_len() >= codec::FRAME_SIZE {
                 in_cons.pop_slice(&mut buf);
                 if let Ok(bytes) = encoder.encode(&buf) {
                     if conn.send_datagram(bytes.into()).is_err() {
