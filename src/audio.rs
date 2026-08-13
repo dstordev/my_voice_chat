@@ -3,6 +3,8 @@ use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{Device, Stream, StreamConfig};
 use ringbuf::traits::*;
 
+use crate::codec::FRAME_SIZE;
+
 /// Структура-конфигурация, чтобы удобнее было передавать настройки
 pub struct AudioSettings {
     pub target_sample_rate: u32,
@@ -15,7 +17,7 @@ impl Default for AudioSettings {
         Self {
             target_sample_rate: 48000,  // 48000 Гц
             input_channels: 1,          // 1 канал (Моно)
-            ring_buffer_capacity: 1024, // Емкость кольцевого буфера
+            ring_buffer_capacity: 4096, // Емкость кольцевого буфера
         }
     }
 }
@@ -64,9 +66,10 @@ pub fn create_input_stream(
 
     let err_fn = |err: cpal::Error| eprintln!("🔴 | Ошибка в аудиопотоке: {}", err);
 
-    let input_data_fn = move |data: &[f32], _: &cpal::InputCallbackInfo| {
+    let input_data_fn = move |chunk: &[f32], _: &cpal::InputCallbackInfo| {
+        // Звуковая карта отдает `chunk` для произвольного использования
         // Делим вход на кадры и берем только 1-й канал
-        for frame in data.chunks(in_channels) {
+        for frame in chunk.chunks(in_channels) {
             let _ = producer.try_push(frame[0]);
         }
     };
@@ -88,13 +91,37 @@ pub fn create_output_stream(
 
     let err_fn = |err: cpal::Error| eprintln!("🔴 | Ошибка в аудиопотоке: {}", err);
 
-    let output_data_fn = move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-        // Делим выход на кадры и берем РОВНО 1 моно-сэмпл, копируя его во все динамики (Л + П)
-        for frame in data.chunks_mut(out_channels) {
-            let sample = consumer.try_pop().unwrap_or(0.0);
-            for channel_sample in frame.iter_mut() {
-                *channel_sample = sample;
+    // Накапливаем 3 кадра Opus (~60 мс звука) для защиты от сетевых задержек
+    let target_buffer = FRAME_SIZE * 3;
+    let mut is_buffering = true;
+
+    let output_data_fn = move |chunk: &mut [f32], _: &cpal::OutputCallbackInfo| {
+        let occupied = consumer.occupied_len();
+
+        // 1. Если мы накопили мало сэмплов — отдаем тишину и ждем
+        if is_buffering {
+            if occupied >= target_buffer {
+                is_buffering = false;
+            } else {
+                chunk.fill(0.0);
+                return;
             }
+        }
+
+        // 2. Если буфер опустел полностью — снова включаем накопление
+        if occupied == 0 {
+            is_buffering = true;
+            chunk.fill(0.0);
+            return;
+        }
+
+        // Звуковая карта отдает `chunk`, куда просит записать звук
+        for frame in chunk.chunks_mut(out_channels) {
+            // `frame` тут стерео, поэтому `frame = [Л, П, Л, П, ...]`
+            // Берем 1 моно-сэмпл
+            let sample = consumer.try_pop().unwrap_or(0.0);
+            // Заполняем фрейм одним моно-сэмплом
+            frame.fill(sample);
         }
     };
 

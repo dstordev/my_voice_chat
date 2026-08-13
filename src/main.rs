@@ -21,7 +21,7 @@ async fn main() -> Result<()> {
     let settings = audio::AudioSettings::default();
     let (in_dev, in_cfg, out_dev, out_cfg) = audio::setup_devices(&settings)?;
 
-    let cap = settings.ring_buffer_capacity * 4;
+    let cap = settings.ring_buffer_capacity;
     let (in_prod, mut in_cons) = HeapRb::<f32>::new(cap).split();
     let (mut out_prod, out_cons) = HeapRb::<f32>::new(cap).split();
 
@@ -56,8 +56,8 @@ async fn main() -> Result<()> {
             return;
         };
         while let Ok(bytes) = recv_conn.read_datagram().await {
-            if let Ok(samples) = decoder.decode(&bytes) {
-                let _ = out_prod.push_slice(&samples);
+            if let Ok(chunk) = decoder.decode(&bytes) {
+                let _ = out_prod.push_slice(&chunk);
             }
         }
         println!("🔴 | Собеседник отключился");
@@ -69,13 +69,13 @@ async fn main() -> Result<()> {
             return;
         };
         let mut interval = tokio::time::interval(Duration::from_millis(5));
-        let mut buf = [0.0f32; codec::FRAME_SIZE];
+        let mut chunk = [0.0f32; codec::FRAME_SIZE];
 
         loop {
             interval.tick().await;
-            if in_cons.occupied_len() >= codec::FRAME_SIZE {
-                in_cons.pop_slice(&mut buf);
-                if let Ok(bytes) = encoder.encode(&buf) {
+            while in_cons.occupied_len() >= codec::FRAME_SIZE {
+                in_cons.pop_slice(&mut chunk);
+                if let Ok(bytes) = encoder.encode(&chunk) {
                     if conn.send_datagram(bytes.into()).is_err() {
                         break;
                     }
