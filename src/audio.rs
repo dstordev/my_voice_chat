@@ -46,7 +46,7 @@ pub fn setup_devices(
     input_config.sample_rate = settings.target_sample_rate;
     output_config.sample_rate = settings.target_sample_rate;
 
-    // Даем PipeWire самому выбирать размер буфера
+    // Даем cpal самому выбирать размер буфера
     input_config.buffer_size = cpal::BufferSize::Default;
     output_config.buffer_size = cpal::BufferSize::Default;
 
