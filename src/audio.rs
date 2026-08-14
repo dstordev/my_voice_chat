@@ -8,7 +8,6 @@ use crate::codec::FRAME_SIZE;
 /// Структура-конфигурация, чтобы удобнее было передавать настройки
 pub struct AudioSettings {
     pub target_sample_rate: u32,
-    pub input_channels: u16,
     pub ring_buffer_capacity: usize,
 }
 
@@ -16,7 +15,6 @@ impl Default for AudioSettings {
     fn default() -> Self {
         Self {
             target_sample_rate: 48000,  // 48000 Гц
-            input_channels: 1,          // 1 канал (Моно)
             ring_buffer_capacity: 4096, // Емкость кольцевого буфера
         }
     }
@@ -39,8 +37,6 @@ pub fn setup_devices(
 
     let mut input_config = input_device.default_input_config()?.config();
     let mut output_config = output_device.default_output_config()?.config();
-
-    input_config.channels = settings.input_channels;
 
     // Принудительно ставим одинаковую частоту для обеих сторон
     input_config.sample_rate = settings.target_sample_rate;
@@ -70,7 +66,8 @@ pub fn create_input_stream(
         // Звуковая карта отдает `chunk` для произвольного использования
         // Делим вход на кадры и берем только 1-й канал
         for frame in chunk.chunks(in_channels) {
-            let _ = producer.try_push(frame[0]);
+            let mono_sample = downmix(in_channels as f32, frame);
+            let _ = producer.try_push(mono_sample);
         }
     };
 
@@ -130,4 +127,11 @@ pub fn create_output_stream(
         .expect("🔴 | Не удалось собрать поток вывода.");
 
     Ok(output_stream)
+}
+
+fn downmix(input_channels: f32, frame: &[f32]) -> f32 {
+    // Складываем значения всех каналов в фрейме и делим на их кол-во.
+    // Таким образом [0.5, -0.1] (стерео) превратится в 0.2 (моно).
+    let sum: f32 = frame.iter().sum();
+    return sum / input_channels;
 }
