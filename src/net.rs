@@ -32,6 +32,5 @@ pub async fn accept_connection(endpoint: &Endpoint) -> Result<Connection> {
 }
 
 pub async fn connect_to_peer(endpoint: &Endpoint, node_id: EndpointId) -> Result<Connection> {
-    let connection = endpoint.connect(node_id, ALPN).await?;
-    Ok(connection)
+    Ok(endpoint.connect(node_id, ALPN).await?)
 }

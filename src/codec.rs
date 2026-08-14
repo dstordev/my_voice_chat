@@ -23,7 +23,7 @@ impl AudioEncoder {
 
     pub fn encode(&mut self, pcm: &[f32]) -> Result<Vec<u8>> {
         let mut output = [0u8; 512];
-        let len = self.encoder.encode_float(pcm, &mut output[..])?;
+        let len = self.encoder.encode_float(pcm, &mut output)?;
         Ok(output[..len].to_vec())
     }
 }
