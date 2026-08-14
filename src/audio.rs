@@ -4,6 +4,7 @@ use cpal::{Device, Stream, StreamConfig};
 use ringbuf::traits::*;
 
 use crate::codec::FRAME_SIZE;
+use crate::resampler::{InputResampler, OutputResampler};
 
 /// Структура-конфигурация, чтобы удобнее было передавать настройки
 pub struct AudioSettings {
@@ -18,6 +19,62 @@ impl Default for AudioSettings {
             ring_buffer_capacity: 4096, // Емкость кольцевого буфера
         }
     }
+}
+
+fn get_best_input_config(device: &Device, target_sr: u32) -> Result<StreamConfig> {
+    let default_cfg = device.default_input_config()?;
+    let default_sr = default_cfg.sample_rate();
+    let target_channels = default_cfg.channels();
+
+    // Если устройство Bluetooth / гарнитура с низкой частотой (16кГц / 24кГц), не форсируем 48кГц, так как CoreAudio/драйвер упадет с UnsupportedConfig
+    if default_sr <= 24000 {
+        let mut stream_cfg = default_cfg.config();
+        stream_cfg.buffer_size = cpal::BufferSize::Default;
+        return Ok(stream_cfg);
+    }
+
+    if let Ok(configs) = device.supported_input_configs() {
+        for config in configs {
+            // Ищем конфиг, который сохраняет родное количество каналов микрофона и поддерживает 48000 Гц
+            if config.channels() == target_channels
+                && config.min_sample_rate() <= target_sr
+                && target_sr <= config.max_sample_rate()
+            {
+                let mut stream_cfg = config.with_sample_rate(target_sr).config();
+                stream_cfg.buffer_size = cpal::BufferSize::Default;
+                return Ok(stream_cfg);
+            }
+        }
+    }
+
+    // Если 48000 Гц с такими каналами не найдены (например, AirPods), берем дефолтный конфиг
+    let mut stream_cfg = default_cfg.config();
+    stream_cfg.buffer_size = cpal::BufferSize::Default;
+    Ok(stream_cfg)
+}
+
+fn get_best_output_config(device: &Device, target_sr: u32) -> Result<StreamConfig> {
+    let default_cfg = device.default_output_config()?;
+    let target_channels = default_cfg.channels();
+
+    if let Ok(configs) = device.supported_output_configs() {
+        for config in configs {
+            // Ищем конфиг, который сохраняет родное количество каналов динамиков (стерео) и поддерживает 48000 Гц
+            if config.channels() == target_channels
+                && config.min_sample_rate() <= target_sr
+                && target_sr <= config.max_sample_rate()
+            {
+                let mut stream_cfg = config.with_sample_rate(target_sr).config();
+                stream_cfg.buffer_size = cpal::BufferSize::Default;
+                return Ok(stream_cfg);
+            }
+        }
+    }
+
+    // Если 48000 Гц не найдены, берем дефолтный конфиг
+    let mut stream_cfg = default_cfg.config();
+    stream_cfg.buffer_size = cpal::BufferSize::Default;
+    Ok(stream_cfg)
 }
 
 /// Получаем дефолтные устройства и подготавливаем их конфиги
@@ -35,16 +92,8 @@ pub fn setup_devices(
         .default_input_device()
         .expect("🔴 | Не удалось получить микрофон.");
 
-    let mut input_config = input_device.default_input_config()?.config();
-    let mut output_config = output_device.default_output_config()?.config();
-
-    // Принудительно ставим одинаковую частоту для обеих сторон
-    input_config.sample_rate = settings.target_sample_rate;
-    output_config.sample_rate = settings.target_sample_rate;
-
-    // Даем cpal самому выбирать размер буфера
-    input_config.buffer_size = cpal::BufferSize::Default;
-    output_config.buffer_size = cpal::BufferSize::Default;
+    let input_config = get_best_input_config(&input_device, settings.target_sample_rate)?;
+    let output_config = get_best_output_config(&output_device, settings.target_sample_rate)?;
 
     println!("ℹ️ | Конфиг микрофона: {:?}", input_config);
     println!("ℹ️ | Конфиг динамиков: {:?}", output_config);
@@ -59,6 +108,9 @@ pub fn create_input_stream(
     mut producer: impl Producer<Item = f32> + Send + 'static,
 ) -> Result<Stream> {
     let in_channels = input_config.channels as usize;
+    let sample_rate = input_config.sample_rate;
+    let needs_resample = sample_rate != 48000;
+    let mut resampler = InputResampler::new(sample_rate, 48000);
 
     let err_fn = |err: cpal::Error| eprintln!("🔴 | Ошибка в аудиопотоке: {}", err);
 
@@ -67,7 +119,13 @@ pub fn create_input_stream(
         // Делим вход на кадры и берем только 1-й канал
         for frame in chunk.chunks(in_channels) {
             let mono_sample = downmix(in_channels as f32, frame);
-            let _ = producer.try_push(mono_sample);
+            if needs_resample {
+                resampler.process(mono_sample, |s| {
+                    let _ = producer.try_push(s);
+                });
+            } else {
+                let _ = producer.try_push(mono_sample);
+            }
         }
     };
 
@@ -85,6 +143,9 @@ pub fn create_output_stream(
     mut consumer: impl Consumer<Item = f32> + Send + 'static,
 ) -> Result<Stream> {
     let out_channels = output_config.channels as usize;
+    let sample_rate = output_config.sample_rate;
+    let needs_resample = sample_rate != 48000;
+    let mut resampler = OutputResampler::new(48000, sample_rate);
 
     let err_fn = |err: cpal::Error| eprintln!("🔴 | Ошибка в аудиопотоке: {}", err);
 
@@ -116,7 +177,11 @@ pub fn create_output_stream(
         for frame in chunk.chunks_mut(out_channels) {
             // `frame` тут стерео, поэтому `frame = [Л, П, Л, П, ...]`
             // Берем 1 моно-сэмпл
-            let sample = consumer.try_pop().unwrap_or(0.0);
+            let sample = if needs_resample {
+                resampler.next_sample(|| consumer.try_pop().unwrap_or(0.0))
+            } else {
+                consumer.try_pop().unwrap_or(0.0)
+            };
             // Заполняем фрейм одним моно-сэмплом
             frame.fill(sample);
         }
