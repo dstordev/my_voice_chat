@@ -12,8 +12,7 @@ impl AudioEncoder {
     pub fn new() -> Result<Self> {
         let mut encoder = Encoder::new(SampleRate::Hz48000, Channels::Mono, Application::LowDelay)?;
 
-        let _ = encoder.set_bandwidth(Bandwidth::Fullband);
-
+        let _ = encoder.set_bandwidth(Bandwidth::Fullband); // 20kHz
         let _ = encoder.set_bitrate(audiopus::Bitrate::BitsPerSecond(64_000)); // 64 kbps
         let _ = encoder.set_inband_fec(true); // Включаем устойчивость к потерям пакетов (FEC)
         let _ = encoder.set_packet_loss_perc(10); // Рассчитываем примерно на 10% потерь сети
@@ -23,7 +22,7 @@ impl AudioEncoder {
 
     pub fn encode(&mut self, pcm: &[f32]) -> Result<Vec<u8>> {
         let mut output = [0u8; 512];
-        let len = self.encoder.encode_float(pcm, &mut output[..])?;
+        let len = self.encoder.encode_float(pcm, &mut output)?;
         Ok(output[..len].to_vec())
     }
 }
