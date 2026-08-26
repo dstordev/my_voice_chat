@@ -112,7 +112,7 @@ pub fn create_input_stream(
     let needs_resample = sample_rate != 48000;
     let mut resampler = InputResampler::new(sample_rate, 48000);
 
-    let err_fn = |err: cpal::Error| eprintln!("🔴 | Ошибка в аудиопотоке: {}", err);
+    let err_fn = |err: cpal::Error| eprintln!("🔴 | Ошибка в аудиопотоке: {err}");
 
     let input_data_fn = move |chunk: &[f32], _: &cpal::InputCallbackInfo| {
         // Звуковая карта отдает `chunk` для произвольного использования
@@ -147,7 +147,7 @@ pub fn create_output_stream(
     let needs_resample = sample_rate != 48000;
     let mut resampler = OutputResampler::new(48000, sample_rate);
 
-    let err_fn = |err: cpal::Error| eprintln!("🔴 | Ошибка в аудиопотоке: {}", err);
+    let err_fn = |err: cpal::Error| eprintln!("🔴 | Ошибка в аудиопотоке: {err}");
 
     // Накапливаем 3 кадра Opus (~60 мс звука) для защиты от сетевых задержек
     let target_buffer = FRAME_SIZE * 3;
